@@ -1,0 +1,7 @@
+## Interface: 110207
+## Title: Fixture
+## Notes: Test addon for wow-addon-ci.
+## Version: 1.0.0
+## X-Website: https://example.com/fixture
+
+Fixture.lua

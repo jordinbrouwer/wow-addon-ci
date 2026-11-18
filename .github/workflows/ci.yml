@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    name: ✅ Checks on the fixture addon
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends lua-check
+      - name: Run every check and test
+        run: python3 ../scripts/checks/run.py all
+      - name: Check the tree is still clean
+        run: python3 ../scripts/checks/run.py worktree-clean
