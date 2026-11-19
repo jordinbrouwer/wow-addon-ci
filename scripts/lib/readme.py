@@ -1,4 +1,4 @@
-"""The release block in README.md (badges, latest release), which only belongs on GitHub."""
+"""The release block in README.md (badges), which only belongs on GitHub."""
 import re
 
 START, END = "<!-- release:start -->", "<!-- release:end -->"

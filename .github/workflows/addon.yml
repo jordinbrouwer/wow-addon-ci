@@ -282,10 +282,7 @@ jobs:
           python3 .ci/scripts/curseforge-information/compare.py "$GITHUB_REF_NAME" | tee .tmp/curseforge.log
           curseforge=false
           if grep -q '\] CHANGED:' .tmp/curseforge.log; then curseforge=true; fi
-          readme=true
-          if git show "origin/$BRANCH:README.md" | grep -qF "**Latest release: [$GITHUB_REF_NAME]("; then readme=false; fi
           echo "curseforge=$curseforge" >> "$GITHUB_OUTPUT"
-          echo "readme=$readme" >> "$GITHUB_OUTPUT"
       - name: Write the README for CurseForge
         if: steps.compare.outputs.curseforge == 'true'
         run: python3 .ci/scripts/curseforge-information/write-readme.py "$GITHUB_REF_NAME" .tmp/curseforge-readme.md
@@ -302,25 +299,22 @@ jobs:
           fi
           gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
       - name: Switch to the default branch
-        if: steps.compare.outputs.readme == 'true'
         run: git checkout -q -B "$BRANCH" "origin/$BRANCH"
       - name: Write the README release block
-        if: steps.compare.outputs.readme == 'true'
         env:
           CF_PROJECT_ID: ${{ secrets.CF_PROJECT_ID }}
-          NOTES_PATH: ${{ needs.build.outputs.notes_path }}
         run: |
           set -euo pipefail
           website="$(sed -nE 's/^## X-Website:[[:space:]]*//p' "$TOC")"
-          python3 .ci/scripts/curseforge-information/write-release-block.py --version "$VERSION" --notes "$NOTES_PATH" --date "$(date -u +%Y-%m-%d)" \
+          python3 .ci/scripts/curseforge-information/write-release-block.py \
             --repo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --website "$website" --project-id "$CF_PROJECT_ID"
       - name: Commit and push README.md
-        if: steps.compare.outputs.readme == 'true'
         run: |
           set -euo pipefail
+          if git diff --quiet README.md; then echo "[$LOG_PREFIX] README.md is up to date."; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -qm "docs(readme): latest release $VERSION" README.md
+          git commit -qm "docs(readme): release badges" README.md
           git pull -q --rebase origin "$BRANCH" 2>&1 | sed "s/^/[$LOG_PREFIX] /"
           git push -q origin "HEAD:refs/heads/$BRANCH" 2>&1 | sed "s/^/[$LOG_PREFIX] /"
       - name: Write the summary
