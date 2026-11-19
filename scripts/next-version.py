@@ -40,7 +40,8 @@ def sentence(text):
     return text if text[-1] in ".!?" else text + "."
 
 
-def plan(entries, repo):
+def plan(entries, repo, written=()):
+    """Bump level and commit lines; commits in `written` wrote their own CHANGELOG lines, so they only bump."""
     level, notes = 0, {}
     for sha, subject, body in entries:
         match = COMMIT.match(subject)
@@ -50,7 +51,7 @@ def plan(entries, repo):
         breaking = bool(bang) or re.search(r"^BREAKING[ -]CHANGE:", body, re.M) is not None
         level = max(level, 3 if breaking else BUMP.get(kind, 0))
         section = SECTION.get(kind) or ("Changed" if breaking else None)
-        if section:
+        if section and sha not in written:
             notes.setdefault(section, []).append(f"{sentence(text)} ([{sha[:7]}]({repo}/commit/{sha}))")
     return level, notes
 
@@ -76,6 +77,8 @@ def merge(body, notes):
             (sections[current] if current else preamble).append(line)
     for name, items in notes.items():
         lines = sections.setdefault(name, [])
+        while lines and not lines[-1].strip():
+            lines.pop()
         known = {line.strip().lower() for line in lines}
         lines.extend(f"- {item}" for item in items if f"- {item}".lower() not in known)
     parts = ["\n".join(preamble).strip()]
@@ -126,7 +129,8 @@ def main():
     if subprocess.run(["git", "rev-parse", "-q", "--verify", f"refs/tags/{current}"], capture_output=True).returncode:
         log.fail(f"Tag '{current}' (latest version in CHANGELOG.md) does not exist.")
 
-    level, notes = plan(commits(current), unreleased(text)["repo"])
+    written = set(git("log", "--format=%H", f"{current}..HEAD", "--", args.changelog).split())
+    level, notes = plan(commits(current), unreleased(text)["repo"], written)
     level = max(level, LEVELS[args.bump])
     if not level:
         return

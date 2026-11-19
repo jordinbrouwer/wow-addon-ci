@@ -23,11 +23,11 @@ with tempfile.TemporaryDirectory() as tmp:
     def commit(message, *extra):
         git("commit", "-q", "--allow-empty", "-m", message, *extra)
 
-    def src_commit(message):
+    def src_commit(message, *paths):
         (repo / "src").mkdir(exist_ok=True)
         with open(repo / "src" / "a.lua", "a") as f:
             f.write(message + "\n")
-        git("add", "src")
+        git("add", "src", *paths)
         commit(message)
         return git("rev-parse", "HEAD")
 
@@ -46,6 +46,9 @@ with tempfile.TemporaryDirectory() as tmp:
 
     feat = src_commit("feat(ui): add dark mode")
     fix = src_commit("fix: crash on load")
+    changelog = (repo / "CHANGELOG.md").read_text()
+    (repo / "CHANGELOG.md").write_text(changelog.replace("- Written by hand.\n", "- Written by hand.\n- Also by hand.\n"))
+    src_commit("feat: writes its own changelog lines", "CHANGELOG.md")
     commit("docs: typo")
     commit("chore: tidy")
 
@@ -56,12 +59,14 @@ with tempfile.TemporaryDirectory() as tmp:
         "## [Unreleased](https://github.com/o/r/compare/1.1.0...main)\n\n"
         "## [1.1.0 (2026-01-02)](https://github.com/o/r/releases/tag/1.1.0)\n\n"
         f"### Added\n- Add dark mode. ([{feat[:7]}](https://github.com/o/r/commit/{feat}))\n\n"
-        "### Changed\n- Written by hand.\n\n"
+        "### Changed\n- Written by hand.\n- Also by hand.\n\n"
         f"### Fixed\n- Crash on load. ([{fix[:7]}](https://github.com/o/r/commit/{fix}))\n\n"
         "## [1.0.0 (2026-01-01)]"
     )
     if expected not in changelog:
         fail(f"Unexpected CHANGELOG.md:\n{changelog}")
+    if "Writes its own" in changelog:
+        fail("A commit that edits CHANGELOG.md must not get a commit line too.")
     if "Typo" in changelog or "Tidy" in changelog:
         fail("docs/chore commits must not be listed.")
 
