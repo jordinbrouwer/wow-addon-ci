@@ -286,18 +286,24 @@ jobs:
       - name: Write the README for CurseForge
         if: steps.compare.outputs.curseforge == 'true'
         run: python3 .ci/scripts/curseforge-information/write-readme.py "$GITHUB_REF_NAME" .tmp/curseforge-readme.md
-      - name: Attach the files to paste or upload to the release
+      - name: Convert the avatar
         if: steps.compare.outputs.curseforge == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          files=(.tmp/curseforge-readme.md)
           if grep -q "\] CHANGED: media [AM] ${TOC%.toc}.tga$" .tmp/curseforge.log; then
             python3 .ci/scripts/curseforge-information/convert-avatar.py "${TOC%.toc}.tga" .tmp/curseforge-avatar.png
-            files+=(.tmp/curseforge-avatar.png)
           fi
-          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+      # On the run, not the release: these files are only for pasting on CurseForge by hand.
+      - name: Upload the files to paste or upload on CurseForge
+        id: files
+        if: steps.compare.outputs.curseforge == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: curseforge-information
+          path: |
+            .tmp/curseforge-readme.md
+            .tmp/curseforge-avatar.png
+          if-no-files-found: error
       - name: Switch to the default branch
         run: git checkout -q -B "$BRANCH" "origin/$BRANCH"
       - name: Write the README release block
@@ -319,6 +325,8 @@ jobs:
           git push -q origin "HEAD:refs/heads/$BRANCH" 2>&1 | sed "s/^/[$LOG_PREFIX] /"
       - name: Write the summary
         if: steps.compare.outputs.curseforge == 'true'
+        env:
+          FILES_URL: ${{ steps.files.outputs.artifact-url }}
         run: |
           set -euo pipefail
           blob="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME"
@@ -328,7 +336,7 @@ jobs:
             echo "| CurseForge field | Update to |"
             echo "| --- | --- |"
             if grep -q '\] CHANGED: readme' .tmp/curseforge.log; then
-              echo "| Description | [curseforge-readme.md]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/curseforge-readme.md) (made from [README.md]($blob/README.md)) |"
+              echo "| Description | \`curseforge-readme.md\` in [curseforge-information]($FILES_URL) (made from [README.md]($blob/README.md)) |"
             fi
             if grep -q '\] CHANGED: description' .tmp/curseforge.log; then
               line="$(git show "$GITHUB_REF_NAME:$TOC" | grep -n '^## Notes:' | cut -d: -f1)"
@@ -351,7 +359,7 @@ jobs:
             images="$(media 'docs/images/.*')"
             if [ -n "$images" ]; then echo "| Images | <ul>$images</ul> |"; fi
             if grep -q "\] CHANGED: media [AM] ${TOC%.toc}.tga$" .tmp/curseforge.log; then
-              echo "| Avatar | [curseforge-avatar.png]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/curseforge-avatar.png) |"
+              echo "| Avatar | \`curseforge-avatar.png\` in [curseforge-information]($FILES_URL) |"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Remind to paste on CurseForge
